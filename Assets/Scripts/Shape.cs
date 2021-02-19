@@ -7,6 +7,7 @@ public class Shape : MonoBehaviour
     private double boardWidth=10;
     private double boardHeight = 20;
     private float fallTime = 0f;
+    private float inputTime = 0f;
     GameManager gameManager;
     [SerializeField] Vector2 defaultPos;
     // Start is called before the first frame update
@@ -18,16 +19,27 @@ public class Shape : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Move();
+        if (!GameManager.isPaused) 
+        {
+            Move();
+        }
+        PauseGame();
     }
     public Vector2 getDefaultPos() 
     {
         return defaultPos;
     }
-
+    void PauseGame() 
+    {
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            GameManager.isPaused = !GameManager.isPaused;
+        }
+    }
 	void Move()
 	{
         fallTime += Time.deltaTime;
+        inputTime += Time.deltaTime;
         if (Input.GetKeyDown(KeyCode.UpArrow))
         {
             transform.RotateAround(transform.position,Vector3.forward,90f);
@@ -36,7 +48,7 @@ public class Shape : MonoBehaviour
                 transform.RotateAround(transform.position, Vector3.forward, -90f);
             }
         }
-        if (Input.GetKeyDown(KeyCode.DownArrow) || fallTime>=GameManager.fallTime)
+        if ((inputTime>=GameManager.inputTime && Input.GetKey(KeyCode.DownArrow)) || fallTime>=GameManager.fallTime)
         {
             Vector3 newPos = new Vector3(0.0f,-1.0f,0.0f);
             if (CollisionDetect(newPos))
@@ -55,6 +67,7 @@ public class Shape : MonoBehaviour
                 enabled = false;
             }
             fallTime = 0f;
+            inputTime = 0f;
         }
         if (Input.GetKeyDown(KeyCode.LeftArrow))
         {

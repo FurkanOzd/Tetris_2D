@@ -5,35 +5,32 @@ using UnityEngine;
 public class GameManager : MonoBehaviour
 {
     // Start is called before the first frame update
-    private const int boardHeight = 20;
-    private const int boardWidth = 10;
-    private GameObject[,]Grid =new GameObject[boardWidth,boardHeight];
+    const int boardHeight = 20;
+    const int boardWidth = 10;
+    GameObject[,]Grid =new GameObject[boardWidth,boardHeight];
     [SerializeField] Shape[] Shapes;
-    private int score=0;
-    private int level=1;
-    private int line=0;
-    private GameObject scoreText;
-    private GameObject linesText;
-    private GameObject levelText;
-    private GameObject nextShapeBox;
+    public static bool isPaused=false;
+    int score=0;
+    int level=1;
+    int line=0;
+    bool gameOver = false;
+    GameObject scoreText;
+    GameObject linesText;
+    GameObject levelText;
+    GameObject nextShapeBox;
+    AudioManager audioManager;
+    public GameOverMenu GameOverScreen;
     public static float fallTime = 0.6f;
+    public static float inputTime = 0.08f;
     Shape nextShape;
     Shape currentShape;
-    public void SetGrid(int X,int Y,GameObject shapeBlock) 
-    {
-        Grid[X, Y] = shapeBlock;
-    }
-    public GameObject GetGrid(int X,int Y) 
-    {
-        return Grid[X, Y];
-    }
     void Start()
     {
         scoreText = GameObject.Find("ScoreText");
         linesText = GameObject.Find("LinesText");
         levelText = GameObject.Find("LevelText");
         nextShapeBox = GameObject.Find("NextShapeBox");
-
+        audioManager = FindObjectOfType<AudioManager>();
         currentShape = Shapes[Random.Range(0, Shapes.Length)];
         Vector3 pos = new Vector3(transform.position.x, 10, 1);
         currentShape = Instantiate(currentShape, currentShape.getDefaultPos(), Quaternion.identity);  // No rotation,
@@ -46,14 +43,28 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (!currentShape.enabled)
+        if (!currentShape.enabled && gameOver==false)
         {
-            spawnShape();
+            GameOver();
+            if (!gameOver) 
+            {
+                spawnShape();
+            }
             CheckGrid();
         }
     }
-    void spawnShape() 
+    public void SetGrid(int X, int Y, GameObject shapeBlock)                // Fill grid with tetromino blocks.
     {
+        if (Y < 20)
+            Grid[X, Y] = shapeBlock;
+    }
+    public GameObject GetGrid(int X, int Y)
+    {
+        return Grid[X, Y];
+    }
+    void spawnShape()                                 //Spawn new shape
+    {
+        audioManager.Play("FallSound");
         currentShape = nextShape;
         currentShape.transform.position = currentShape.getDefaultPos();
         currentShape.enabled = true;
@@ -67,10 +78,24 @@ public class GameManager : MonoBehaviour
         Shape shape = Shapes[Random.Range(0, Shapes.Length)];
         return shape;
     }
-    void CheckGrid()
+    void GameOver()                                              //GameOver
+    {
+        for (int i = 0; i < boardWidth; i++) 
+        {
+            if (Grid[i, boardHeight-1] != null) 
+            {
+                gameOver = true;
+                audioManager.Play("GameOverSound");
+                GameOverScreen.Setup(score);
+            }
+        }
+    }
+    void CheckGrid()                           //Checking line is full 
     {
         bool isLineFilled;
-        for (int j = boardHeight-1; j>=0; j--)
+        int firstLineIndex = -1;
+        int filledLineCount = 0;
+        for (int j = 0; j<boardHeight; j++)
         {
             isLineFilled = false;
             for (int i = 0; i < boardWidth; i++)
@@ -87,51 +112,71 @@ public class GameManager : MonoBehaviour
             }
             if (isLineFilled == true)
             {
-                DeleteLine(j);
-                Scoring();
+                if (firstLineIndex == -1) 
+                {
+                    firstLineIndex = j;
+                }
+                filledLineCount++;
             }
         }
-    }
-    void DeleteLine(int j) 
-    {
-        for (int i = 0; i < boardWidth; i++) 
+        if (filledLineCount > 0)
         {
-            Destroy(Grid[i, j]);
+            DeleteLine(firstLineIndex, filledLineCount);
         }
-        RemoveParentObjects();
-        EditGrid(j);
     }
-    void EditGrid(int lineNumber)
+    void DeleteLine(int firstLine,int count)
     {
-        for (int j = lineNumber + 1; j < boardHeight; j++)
+        for (int j = firstLine; j < firstLine + count; j++)
+        {
+            for (int i = 0; i < boardWidth; i++)
+            {
+                Destroy(Grid[i, j]);
+            }
+        }
+        audioManager.Play("LineClearSound");
+        EditGrid(firstLine, count);
+        Scoring(count);
+        RemoveParentObjects();
+    }
+    void EditGrid(int lineNumber,int count)                            //Edit Grid when lines deleted.
+    {
+        for (int j = lineNumber+count; j<boardHeight; j++)
         {
             for (int i = 0; i < boardWidth; i++)
             {
                 if (Grid[i, j] != null)
                 {
                     Vector3 pos = Grid[i, j].transform.position;
-                    Grid[i, j].transform.position = new Vector3(pos.x, pos.y - 1.0f, pos.z);
-                    Grid[i, j - 1] = Grid[i, j];
+                    Grid[i, j].transform.position = new Vector3(pos.x, pos.y - 1.0f*count, pos.z);
+                    Grid[i, j - count] = Grid[i, j];
                     Grid[i, j] = null;
                 }
             }
         }
     }
-    void Scoring() 
+    void Scoring(int count)                                 
     {
-        score += 100;
-        line++;
+        if (count > 1)
+            score += (100 + (count * 10)) * count;
+        else 
+        {
+            score += 100;
+        }
+        for (int i = 0; i < count; i++)
+        {
+            line++;
+        }
         if (line % 10 == 0) 
         {
             level++;
+            fallTime -= 0.03f;
         }
-        scoreText.GetComponent<UnityEngine.UI.Text>().text = "  Score:    " + score;
-        linesText.GetComponent<UnityEngine.UI.Text>().text = "  Lines:    " + line;
-        levelText.GetComponent<UnityEngine.UI.Text>().text = "  Level:    " + level;
+        scoreText.GetComponent<UnityEngine.UI.Text>().text = "  Score: " + score;
+        linesText.GetComponent<UnityEngine.UI.Text>().text = "  Lines: " + line;
+        levelText.GetComponent<UnityEngine.UI.Text>().text = "  Level: " + level;
     }
-    void RemoveParentObjects() 
+    void RemoveParentObjects()                                        // If a tetromino block has no child then it's empty and remove
     {
-        Debug.Log("Burdayim-ParentObject");
         GameObject[] Tetrominoes=GameObject.FindGameObjectsWithTag("Tetromino");
         for (int i = 0; i < Tetrominoes.Length; i++) 
         {
